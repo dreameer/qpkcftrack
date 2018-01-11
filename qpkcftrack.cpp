@@ -855,9 +855,25 @@ int main(){
     // Create OpenCV capture object, ensure it works.
     cv::VideoCapture inputcamera(pipeline, cv::CAP_GSTREAMER);
     Mat img;
+    Rect2d init,object;
+    init.x = 440;
+    init.y = 260;
+    init.width = 200;
+    init.height = 200;
+    inputcamera >> img;
+    bool initstatus = initImpl(img,init);
     for(;;){
 		inputcamera >> img;
-		
+		if(initstatus){
+			if(updateImpl(img,object)){
+				rectangle(img,object,Scalar(255,0,0),2,1);
+			}else{
+				rectangle(img,object,Scalar(0,254,0),2,1);
+			}
+		}
+		else{
+			cout<<"cant initimpl"<<endl;
+		}
 		imshow("img",img);
 		if((char)waitKey(1)=='b')break;
 	}
