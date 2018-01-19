@@ -41,6 +41,7 @@
 #include "colorname.hpp"
 #include <opencv2/core/utility.hpp>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -168,7 +169,7 @@ enum MODE {
   void TrackerKCFImpl()
   {
     isInit = false;
-    resizeImage = false;
+    resizeImage = true;
     use_custom_extractor_pca = false;
     use_custom_extractor_npca = false;
   }
@@ -225,7 +226,7 @@ enum MODE {
     // perform fourier transfor to the gaussian response
     fft2(y,yf);
 
-    TrackerKCFImpl();   //model=Ptr<TrackerKCFModel>(new TrackerKCFModel(params));
+    //TrackerKCFImpl();   //model=Ptr<TrackerKCFModel>(new TrackerKCFModel(params));
 
     // record the non-compressed descriptors
     if((params.desc_npca & GRAY) == GRAY)descriptors_npca.push_back(GRAY);
@@ -840,43 +841,52 @@ namespace patch
 std::string get_tegra_pipeline(int width, int height, int fps) {
     return "nvcamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)" + patch::to_string(width) + ", height=(int)" +
            patch::to_string(height) + ", format=(string)I420, framerate=(fraction)" + patch::to_string(fps) +
-           "/1 ! nvvidconv flip-method=2 ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
+           "/1 ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
 int main(){
-	int WIDTH = 1080;
-    int HEIGHT = 720;
-    int FPS = 30;
+	int WIDTH = 1920;
+    int HEIGHT = 1080;
+    int FPS = 120;
  
     // Define the gstream pipeline
     std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
     std::cout << "Using pipeline: \n\t" << pipeline << "\n";
- 
     // Create OpenCV capture object, ensure it works.
     cv::VideoCapture inputcamera(pipeline, cv::CAP_GSTREAMER);
-    Mat img;
-    Rect2d init,object;
-    init.x = 440;
-    init.y = 260;
-    init.width = 200;
-    init.height = 200;
-    inputcamera >> img;
-    bool initstatus = initImpl(img,init);
+    
+    Mat frame;
+    Rect2d object_rect, init_rect, center_rect;
+    for(int i=0;i<100;i++)
+    inputcamera >> frame;
+    center_rect = Rect(frame.cols * 0.40, frame.rows * 0.45,frame.cols * 0.2, frame.rows * 0.1);
+    init_rect = center_rect;
+    object_rect = init_rect;
+    bool initstatus = initImpl(frame,init_rect);
     for(;;){
-		inputcamera >> img;
+		int64 start = cv::getTickCount();
+		inputcamera >> frame;
 		if(initstatus){
-			if(updateImpl(img,object)){
-				rectangle(img,object,Scalar(255,0,0),2,1);
+			if(updateImpl(frame,object_rect)){
+				rectangle(frame,object_rect,Scalar(255,0,0),2,1);
 			}else{
-				rectangle(img,object,Scalar(0,254,0),2,1);
+				rectangle(frame,object_rect,Scalar(0,254,0),2,1);
 			}
 		}
 		else{
 			cout<<"cant initimpl"<<endl;
+			break;
 		}
-		imshow("img",img);
+		//rectangle(frame,center_rect,Scalar(0,254,0),2,1);
+		imshow("frame",frame);
 		if((char)waitKey(1)=='b')break;
+		
+		
+		
+		
+		
+		double fps = cv::getTickFrequency() / (cv::getTickCount()-start);
+		cout<<frame.cols<<" "<<frame.rows<<" "<<fps<<endl;
 	}
-	printf("hello world.\n");
 	return 0;
 }
