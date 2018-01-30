@@ -49,6 +49,7 @@
 #include <cmath>
 #include <iostream>
 
+
 using namespace std;
 using namespace cv;
 
@@ -842,10 +843,11 @@ enum MODE {
 int main(){
 
     cv::VideoCapture inputcamera(0);
-    
+	//inputcamera.set(CAP_PROP_FRAME_WIDTH,1280);
+	//inputcamera.set(CAP_PROP_FRAME_HEIGHT,720);
     Mat frame,gray;
     Rect2d object_rect, init_rect, center_rect;
-    for(int i=0;i<100;i++)
+    for(int i=0;i<10;i++)
     inputcamera >> frame;
 	
     center_rect = Rect(frame.cols * 0.40, frame.rows * 0.45,frame.cols * 0.2, frame.rows * 0.1);
@@ -853,11 +855,12 @@ int main(){
     object_rect = init_rect;
 
 	qp::initParams();
-	cvtColor(frame,gray,CV_BGR2GRAY);
+	//cvtColor(frame,gray,CV_BGR2GRAY);
     bool initstatus = qp::initImpl(gray,init_rect);
     for(;;){
 		int64 start = cv::getTickCount();
 		inputcamera >> frame;
+		/*
 		cvtColor(frame,gray,CV_BGR2GRAY);
 		if(initstatus){
 			if(qp::updateImpl(gray,object_rect)){
@@ -870,13 +873,17 @@ int main(){
 			cout<<"cant initimpl"<<endl;
 			break;
 		}
-		//rectangle(frame,center_rect,Scalar(0,254,0),2,1);
+		*/
+		double fps = cv::getTickFrequency() / (cv::getTickCount()-start);
+		//cout<<"fps:"<<fps<<endl;
+		std::ostringstream stm;
+        stm << fps;
+		string frameinfo = " fps:" + stm.str();
+		putText(frame, frameinfo, Point(10, 40),FONT_HERSHEY_COMPLEX, 0.5, Scalar(0, 0, 255), 1, 8);
 		imshow("frame",frame);
-		imshow("gray",gray);
 		if((char)waitKey(1)=='b')break;
 		
-		double fps = cv::getTickFrequency() / (cv::getTickCount()-start);
-		cout<<"fps:"<<fps<<endl;
+
 		
 	}
 	return 0;
