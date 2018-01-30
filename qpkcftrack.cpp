@@ -52,6 +52,7 @@
 using namespace std;
 using namespace cv;
 
+namespace qp{
 enum MODE {
 	GRAY = (1<<0),
 	CN   = (1<<1),
@@ -835,7 +836,8 @@ enum MODE {
 
     ifft2(spec2_data,response_data);
   }
-
+  
+  }
 
 int main(){
 
@@ -850,15 +852,15 @@ int main(){
     init_rect = center_rect;
     object_rect = init_rect;
 
-	initParams();
+	qp::initParams();
 	cvtColor(frame,gray,CV_BGR2GRAY);
-    bool initstatus = initImpl(gray,init_rect);
+    bool initstatus = qp::initImpl(gray,init_rect);
     for(;;){
 		int64 start = cv::getTickCount();
 		inputcamera >> frame;
 		cvtColor(frame,gray,CV_BGR2GRAY);
 		if(initstatus){
-			if(updateImpl(gray,object_rect)){
+			if(qp::updateImpl(gray,object_rect)){
 				rectangle(frame,object_rect,Scalar(255,0,0),2,1);
 			}else{
 				rectangle(frame,object_rect,Scalar(0,254,0),2,1);
@@ -874,6 +876,8 @@ int main(){
 		if((char)waitKey(1)=='b')break;
 		
 		double fps = cv::getTickFrequency() / (cv::getTickCount()-start);
+		cout<<"fps:"<<fps<<endl;
+		
 	}
 	return 0;
 }
