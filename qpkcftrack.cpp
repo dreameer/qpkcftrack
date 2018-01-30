@@ -57,31 +57,31 @@ enum MODE {
 	CN   = (1<<1),
 	CUSTOM = (1<<2)
 };
-  /*
- * Parameters
- */
+
   typedef struct Params_{
-      double detect_thresh = 0.5f;
-      double sigma=0.2f;
-      double lambda=0.0001f;
-      double interp_factor=0.075f;
-      double output_sigma_factor=1.0f / 16.0f;
-      bool resize=true;
-      int max_patch_size=80*80;
-      bool split_coeff=true;
-      bool wrap_kernel=false;
-      int desc_npca = GRAY;
-      int desc_pca = CN;
+      double detect_thresh;
+      double sigma;
+      double lambda;
+      double interp_factor;
+      double output_sigma_factor;
+      bool resize;
+      int max_patch_size;
+      bool split_coeff;
+      bool wrap_kernel;
+      int desc_npca;
+      int desc_pca;
 
       //feature compression
-      bool compress_feature=true;
-      int compressed_size=2;
-      double pca_learning_rate=0.15f;
+      bool compress_feature;
+      int compressed_size;
+      double pca_learning_rate;
   };
   
-  Params_ params;
-  
-    bool isInit = false;
+
+
+    Params_ params;
+
+    bool isInit = true;
     float output_sigma;
     Rect2d roi;
     Mat hann; 	//hann window filter
@@ -130,12 +130,6 @@ enum MODE {
     int frame;
     
 
-
-    void read( const FileNode& /*fn*/ );
-    void write( FileStorage& /*fs*/ ) ;
-    void setFeatureExtractor(void (*f)(const Mat, const Rect, Mat&), bool pca_func = false);
-
-
     bool initImpl( const Mat& /*image*/, const Rect2d& boundingBox );
     bool updateImpl( const Mat& image, Rect2d& boundingBox );
 
@@ -165,13 +159,42 @@ enum MODE {
     void shiftCols(Mat& mat, int n) ;
 
 
+	/*
+	 detect_thresh = 0.5f;     //!<  detection confidence threshold
+	 sigma=0.2f;               //!<  gaussian kernel bandwidth
+	 lambda=0.0001f;           //!<  regularization
+	 interp_factor=0.075f;     //!<  linear interpolation factor for adaptation
+	 output_sigma_factor=1.0f / 16.0f;  //!<  spatial bandwidth (proportional to target)
+	 resize=true;              //!<  activate the resize feature to improve the processing speed
+	 max_patch_size=80*80;     //!<  threshold for the ROI size
+	 split_coeff=true;         //!<  split the training coefficients into two matrices
+	 wrap_kernel=false;        //!<  wrap around the kernel values
+	 desc_npca = GRAY;         //!<  non-compressed descriptors of TrackerKCF::MODE
+	 desc_pca = CN;            //!<  compressed descriptors of TrackerKCF::MODE
 
-  void TrackerKCFImpl()
+	 //feature compression
+	 compress_feature=true;    //!<  activate the pca method to compress the features
+	 compressed_size=2;        //!<  feature size after compression
+	 pca_learning_rate=0.15f;  //!<  compression learning rate
+	 *
+	 */
+  void initParams()
   {
-    isInit = false;
-    resizeImage = true;
-    use_custom_extractor_pca = false;
-    use_custom_extractor_npca = false;
+	  params.detect_thresh = 0.5f;
+	  params.sigma = 0.2f;
+	  params.lambda = 0.0001f;
+	  params.interp_factor = 0.075f;
+	  params.output_sigma_factor = 1.0f / 16.0f;
+	  params.resize = false;
+	  params.max_patch_size = 80*80;
+	  params.split_coeff = true;
+	  params.wrap_kernel = false;
+	  params.desc_npca = GRAY;
+	  params.desc_pca = GRAY;
+
+	  params.compress_feature = true;
+	  params.compressed_size = 1;
+	  params.pca_learning_rate = 0.15f;
   }
 
   /*
@@ -226,7 +249,10 @@ enum MODE {
     // perform fourier transfor to the gaussian response
     fft2(y,yf);
 
-    //TrackerKCFImpl();   //model=Ptr<TrackerKCFModel>(new TrackerKCFModel(params));
+    resizeImage = false;
+    use_custom_extractor_pca = false;
+    use_custom_extractor_npca = false;
+
 
     // record the non-compressed descriptors
     if((params.desc_npca & GRAY) == GRAY)descriptors_npca.push_back(GRAY);
@@ -546,16 +572,9 @@ enum MODE {
     pca_data=pca_data.reshape(1,src.rows*src.cols);
 
     bool oclSucceed =false;
-#define TMM_VERIFICATION 0
 
-    if (oclSucceed == false || TMM_VERIFICATION) {
+    if (oclSucceed == false) {
       new_cov=1.0f/(float)(src.rows*src.cols-1)*(pca_data.t()*pca_data);
-#if TMM_VERIFICATION
-      for(int i = 0; i < new_cov.rows; i++)
-        for(int j = 0; j < new_cov.cols; j++)
-          if (abs(new_cov.at<float>(i, j) - result.getMat(ACCESS_RW).at<float>(i , j)) > abs(new_cov.at<float>(i, j)) * 1e-3)
-            printf("error @ i %d j %d got %G expected %G \n", i, j, result.getMat(ACCESS_RW).at<float>(i , j), new_cov.at<float>(i, j));
-#endif
       if(old_cov.rows==0)old_cov=new_cov.clone();
       SVD::compute((1.0f - pca_rate) * old_cov + pca_rate * new_cov, w, u, vt);
     }
@@ -817,57 +836,29 @@ enum MODE {
     ifft2(spec2_data,response_data);
   }
 
-  void setFeatureExtractor(void (*f)(const Mat, const Rect, Mat&), bool pca_func){
-    if(pca_func){
-      extractor_pca.push_back(f);
-      use_custom_extractor_pca = true;
-    }else{
-      extractor_npca.push_back(f);
-      use_custom_extractor_npca = true;
-    }
-  }
-
-
-
-namespace patch
-{
-    template < typename T > std::string to_string( const T& n )
-    {
-        std::ostringstream stm ;
-        stm << n ;
-        return stm.str() ;
-    }
-}
-std::string get_tegra_pipeline(int width, int height, int fps) {
-    return "nvcamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=(int)" + patch::to_string(width) + ", height=(int)" +
-           patch::to_string(height) + ", format=(string)I420, framerate=(fraction)" + patch::to_string(fps) +
-           "/1 ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
-}
 
 int main(){
-	int WIDTH = 1920;
-    int HEIGHT = 1080;
-    int FPS = 120;
- 
-    // Define the gstream pipeline
-    std::string pipeline = get_tegra_pipeline(WIDTH, HEIGHT, FPS);
-    std::cout << "Using pipeline: \n\t" << pipeline << "\n";
-    // Create OpenCV capture object, ensure it works.
-    cv::VideoCapture inputcamera(pipeline, cv::CAP_GSTREAMER);
+
+    cv::VideoCapture inputcamera(0);
     
-    Mat frame;
+    Mat frame,gray;
     Rect2d object_rect, init_rect, center_rect;
     for(int i=0;i<100;i++)
     inputcamera >> frame;
+	
     center_rect = Rect(frame.cols * 0.40, frame.rows * 0.45,frame.cols * 0.2, frame.rows * 0.1);
     init_rect = center_rect;
     object_rect = init_rect;
-    bool initstatus = initImpl(frame,init_rect);
+
+	initParams();
+	cvtColor(frame,gray,CV_BGR2GRAY);
+    bool initstatus = initImpl(gray,init_rect);
     for(;;){
 		int64 start = cv::getTickCount();
 		inputcamera >> frame;
+		cvtColor(frame,gray,CV_BGR2GRAY);
 		if(initstatus){
-			if(updateImpl(frame,object_rect)){
+			if(updateImpl(gray,object_rect)){
 				rectangle(frame,object_rect,Scalar(255,0,0),2,1);
 			}else{
 				rectangle(frame,object_rect,Scalar(0,254,0),2,1);
@@ -879,14 +870,10 @@ int main(){
 		}
 		//rectangle(frame,center_rect,Scalar(0,254,0),2,1);
 		imshow("frame",frame);
+		imshow("gray",gray);
 		if((char)waitKey(1)=='b')break;
 		
-		
-		
-		
-		
 		double fps = cv::getTickFrequency() / (cv::getTickCount()-start);
-		cout<<frame.cols<<" "<<frame.rows<<" "<<fps<<endl;
 	}
 	return 0;
 }
